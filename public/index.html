@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Simple Price Chart</title>
+    <style>
+        body { background:#111; color:#eee; font-family:sans-serif; text-align: center; }
+        canvas { background:#222; display:block; margin:20px auto; }
+        select, input {
+            margin: 10px;
+            padding: 6px 10px;
+            font-size: 14px;
+            background: #222;
+            color: #eee;
+            border: 1px solid #555;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+
+<div style="display: flex">
+    <div style="flex:0.9">
+        <div>
+            <label for="marketSelect">Market:</label>
+            <select id="marketSelect"></select>
+        </div>
+
+        <div>
+            <label for="pointsInput">Max Points:</label>
+            <input id="pointsInput" type="number" min="10" max="5000" value="500"/>
+        </div>
+    </div>
+    <div>
+        <canvas id="priceChart" width="1600" height="980"></canvas>
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('priceChart');
+    const ctx = canvas.getContext('2d');
+
+    let market = 'netherite_ingot';
+    let maxPoints = 10000;
+    let price_history = [];
+    let buy_history = [];
+
+    const marketSelect = document.getElementById('marketSelect');
+    const pointsInput = document.getElementById('pointsInput');
+
+    marketSelect.addEventListener('change', () => {
+        market = marketSelect.value;
+        fetchData();
+    });
+
+    pointsInput.addEventListener('input', () => {
+        maxPoints = parseInt(pointsInput.value) || 500;
+        drawChart();
+    });
+
+    async function loadMarkets() {
+        const res = await fetch('/markets');
+        const markets = await res.json();
+        marketSelect.innerHTML = '';
+        for (const m of markets) {
+            const opt = document.createElement('option');
+            opt.value = m;
+            opt.textContent = m;
+            marketSelect.appendChild(opt);
+        }
+        market = markets[0];
+        marketSelect.value = market;
+        fetchData();
+    }
+
+    async function fetchData() {
+        try {
+            const res = await fetch('/data/' + market);
+            price_history = await res.json();
+            const res2 = await fetch('/recent/' + market);
+            buy_history = await res2.json();
+            drawChart();
+        } catch(e) {
+            console.error('Fetch error:', e);
+        }
+    }
+
+    function drawChart() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const data = price_history.slice(-maxPoints);
+        if (data.length < 2) return;
+
+        const prices = data.map(p => p.price);
+        const times = data.map(p => p.time);
+        const minPrice = Math.min(...prices);
+        const maxPrice = Math.max(...prices);
+        const minTime = Math.min(...times);
+        const maxTime = Math.max(...times);
+
+        let shouldAbbreviate = minPrice > 1000;
+
+        const padding = 120;
+        const margin = 5;
+        const chartWidth = canvas.width - padding * 2 - margin * 2;
+        const chartHeight = canvas.height - padding * 2 - margin * 2;
+        const verticalPadding = 5000;
+        let adjustedMinPrice = minPrice - verticalPadding;
+        if (adjustedMinPrice < 0) adjustedMinPrice = 0;
+        const adjustedMaxPrice = maxPrice + verticalPadding;
+        const priceRange = adjustedMaxPrice - adjustedMinPrice;
+
+        ctx.strokeStyle = '#555';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(padding + margin, padding + margin);
+        ctx.lineTo(padding + margin, canvas.height - padding - margin);
+        ctx.lineTo(canvas.width - padding - margin, canvas.height - padding - margin);
+        ctx.stroke();
+
+        ctx.strokeStyle = '#444';
+        ctx.lineWidth = 1;
+        ctx.font = '12px monospace';
+        ctx.fillStyle = '#888';
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'middle';
+
+        const priceStep = 2000;
+        let startPrice = Math.ceil(adjustedMinPrice / priceStep) * priceStep;
+        const endPrice = adjustedMaxPrice;
+        if (startPrice < 0) startPrice = 0;
+
+        for (let price = startPrice; price <= endPrice; price += priceStep) {
+            const y = padding + margin + chartHeight - ((price - adjustedMinPrice) / priceRange) * chartHeight;
+            ctx.beginPath();
+            ctx.moveTo(padding + margin, y);
+            ctx.lineTo(canvas.width - padding - margin, y);
+            ctx.stroke();
+            if (shouldAbbreviate) {
+                ctx.fillText("$" + (price/1000).toFixed(0)+"K", padding - 15, y);
+            }else {
+                ctx.fillText("$" + price.toFixed(0), padding - 15, y);
+            }
+        }
+
+        const last = data[data.length - 1];
+        const lastY = padding + margin + chartHeight - ((last.price - adjustedMinPrice) / priceRange) * chartHeight;
+
+        ctx.strokeStyle = '#aaa';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(padding + margin, lastY);
+        ctx.lineTo(canvas.width - padding - margin + 30, lastY);
+        ctx.stroke();
+        ctx.textAlign = 'left';
+
+        if (shouldAbbreviate) {
+            ctx.fillText("Ask: $" + (last.price/1000).toFixed(0)+"K", chartWidth + padding + margin + 50, lastY);
+        }else {
+            ctx.fillText("Ask: $" + last.price.toFixed(0), chartWidth + padding + margin + 50, lastY);
+        }
+
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        data.forEach((point, i) => {
+            const x = padding + margin + ((point.time - minTime) / (maxTime - minTime || 1)) * chartWidth;
+            const y = padding + margin + chartHeight - ((point.price - adjustedMinPrice) / priceRange) * chartHeight;
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+
+
+
+        ctx.fillStyle = 'lime';
+        for (const point of buy_history) {
+            if (point.time >= minTime && point.time <= maxTime && point.price < maxPrice && point.price >= minPrice) {
+                const x = padding + margin + ((point.time - minTime) / (maxTime - minTime || 1)) * chartWidth;
+                const y = padding + margin + chartHeight - ((point.price - adjustedMinPrice) / priceRange) * chartHeight;
+                ctx.beginPath();
+                ctx.arc(x, y, 4, 0, 2 * Math.PI);
+                ctx.fill();
+            }
+        }
+    }
+
+    setInterval(fetchData, 5000);
+    loadMarkets();
+</script>
+</body>
+</html>

@@ -158,6 +158,29 @@
             ctx.fillText("Ask: $" + last.price.toFixed(0), chartWidth + padding + margin + 50, lastY);
         }
 
+        ctx.strokeStyle = '#444';
+        ctx.lineWidth = 1;
+        ctx.font = '12px monospace';
+        ctx.fillStyle = '#888';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+
+        const numTimeLabels = 10;
+        for (let i = 0; i <= numTimeLabels; i++) {
+            const t = minTime + (i / numTimeLabels) * (maxTime - minTime);
+            const minutesAgo = Math.round((Date.now() - t) / 60000);
+            const label = minutesAgo + 'm ago';
+            const x = padding + margin + (i / numTimeLabels) * chartWidth;
+            const y = canvas.height - padding + 5;
+
+            ctx.beginPath();
+            ctx.moveTo(x, canvas.height - padding - margin);
+            ctx.lineTo(x, canvas.height - padding - margin + 6);
+            ctx.stroke();
+            ctx.fillText(label, x, y);
+        }
+
+
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 2;
         ctx.beginPath();

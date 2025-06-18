@@ -93,6 +93,9 @@ async function updateRecentBuys(item) {
                     price: entry.price,
                     time: entry.unixMillisDateSold
                 });
+                if (buy_history[item].length > 100) {
+                    buy_history[item] = buy_history[item].slice(-100);
+                }
             }
         }
     }
@@ -104,6 +107,9 @@ setInterval(async () => {
             const price = await getCurrentBestOffer(market);
             if (price !== null) {
                 price_history[market].push({ price, time: Date.now() });
+                if (price_history[market].length > 100) {
+                    price_history[market] = price_history[market].slice(-100);
+                }
                 console.log(`Logged best price for ${market}: $${price}`);
             }
         }
